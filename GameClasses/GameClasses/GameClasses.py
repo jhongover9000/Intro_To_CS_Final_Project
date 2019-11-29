@@ -43,9 +43,6 @@ class Entity:
         elif self.dir < 0:
             image(self.img,self.x,self.y,self.w,self.h,928,0,0,640)
 
-#test comment
-#blah blah new code here
-
 class Player(Entity):
     def __init__(self,x,y,vx,vy,w,h,r,f,img,d):
         Entity.__init__(self,x,y,vx,vy,w,h,f,img,d)
@@ -95,7 +92,7 @@ class Player(Entity):
         
         
         self.imgPath = str(path) + "/images/" + self.swordcount + self.stand + "Krt" + self.moveDictPath[self.action]
-
+        #^Explain the image storing path to me sometime
 
     #updates self.dir based on self.direction
         if self.direction["right"] == True:  #right
@@ -199,6 +196,8 @@ class Player(Entity):
                         self.action = "still"
                     else:
                         self.action = "jump"
+                #Dealing damage
+                if self.
         
         #adds the preceding value before framePoint for image file
         if self.framePoint > 9:
@@ -221,19 +220,40 @@ class Player(Entity):
         #for i in range(2):
             #print(self.hitRangex[i])
             #print(self.hitRangey[i])
-            
-        
-        
+    
+    def takeDamage(self, attack): #Class to check if Kirito is blocking, then take damage
+        self.dmg = attack
+        if self.status == "defending":
+            pass
+            #Take less damage, write this code here
+        else:
+            self.health -= dmg
     
 class Enemy(Entity):
-    def __init__(self,x,y,vx,vy,w,h,f,img,d):
+    def __init__(self,x,y,vx,vy,w,h,r,f,img,d): #added radius to Enemy
         Entity.__init__(self,x,y,vx,vy,w,h,f,img,d)
         self.hitRangex = range(int((self.x + self.w) - (self.w/8)),(int(self.x + self.w)+(self.w/8)))
         self.hitRangey = range(int((self.y + self.h) - ((self.h/2)*0.3125)),int((self.y + self.h) + ((self.h/2)*1.231))) 
+        self.r = r
+        self.health = 100
+        self.attack = 50 #DEPENDS ON DIFFICULTY
+        self.dir = d
+        self.lastAction = "still"
+        self.action = "still" #still, patrol or attack?
 
-
-
-
+    def update(self):
+        self.attackPlayer()
+        
+    #MELEE ATTACKING
+    def attackPlayer(self):
+        if self.distance() <= self.r + g.kirito.r: #if enemy radius and kirito radius next to each other
+            self.action = "attack"
+            g.kirito.takeDamage(self.attack) #Deals 'attack' amount of damage to Kirito
+        
+    def distance (self): #Distance from the player Kirito, for melee characters
+        #Distance formula
+        return ((self.x-g.kirito.x)**2+(self.y-g.kirito.y)**2)**0.5
+        
 #class stage
         
 #stage 1
