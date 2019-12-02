@@ -48,7 +48,8 @@ class Player(Entity):
         Entity.__init__(self,x,y,vx,vy,w,h,f,img,d)
         self.direction = {"left":False, "right":False, "up":False}
         self.r = r
-        self.health = 100
+        self.maxhealth = 100 #Maximum health of Kirito!
+        self.health = self.maxhealth
         self.attack = 50
         self.mp = 10
         self.experience = 0
@@ -90,8 +91,7 @@ class Player(Entity):
             self.moveDictPath = {"still": "000", "walk":"400", "jump":"200", "block":"500", "normalATK":"001", "knockBack":"003", "throw":"990"}
             self.moveDictFrames = {"still":7, "walk":5, "jump":6, "block":2, "normalATK":3, "knockBack":6, "throw":5}
         
-        
-        self.imgPath = str(path) + "/images/" + self.swordcount + self.stand + "Krt" + self.moveDictPath[self.action]
+        self.imgPath = str(path) + "/images/Kirito/" + self.swordcount + self.stand + "Krt" + self.moveDictPath[self.action]
         #^Explain the image storing path to me sometime
 
     #updates self.dir based on self.direction
@@ -197,7 +197,7 @@ class Player(Entity):
                     else:
                         self.action = "jump"
                 #Dealing damage
-                if self.
+                #if self.
         
         #adds the preceding value before framePoint for image file
         if self.framePoint > 9:
@@ -268,16 +268,47 @@ class Game:
         self.h = h
         self.g = g
         self.frames = 0
-
-
+        self.backgr = ["", "", ""]
         self.kirito = Player(0,0,0,0,500,345,0,60,"Krt",1)
         self.kirito.y = self.g - (self.kirito.h)
-
+        
+        #Loading Background Images from /images/background
+        for i in (range(3)): #[0, 1, 2]
+            self.backgr[i] = loadImage(path + "/images/Background/0" + str(i) + ".png")
+    
     def display(self):
+        for img in self.backgr:
+            image(img, 0, 0, self.w, self.h)
         self.frames +=1
         self.kirito.display()
+        
+        #Displaying Player Stats
+        #Health bar
+        noStroke()
+        if self.kirito.health > 50:
+            fill(0, 255, 0)
+        elif self.kirito.health < 25:
+            fill(255, 0, 0)
+        else:
+            fill(255, 200, 0)
+            
+        self.newwidth = (float(self.kirito.health) / self.kirito.maxhealth) * 200 #Percentage of max health
+        rect(100, 100, self.newwidth, 50)
+        stroke(1)
+        noFill()
+        rect(100, 100, 200, 50) #x,y,w,h
+        
+        #For testing purposes
+        textSize(20)
+        text("Click to reduce health, for testing", 10, 30)
+        
+        self.gameOverCheck()
 
-
+    def gameOverCheck(self):
+        if self.kirito.health == 0:
+            self.gameOver = True
+            text("GAME OVER", 100, 100)
+            
 g = Game(1080,720,640)
 
 
@@ -289,6 +320,12 @@ def setup():
 def draw():
     background(0)
     g.display()
+
+def mouseClicked():
+    #For testing purposes
+    if mouseButton == LEFT:
+        g.kirito.health -= 10
+        print(g.kirito.health)
 
 def keyPressed():
     if keyCode == 83:
