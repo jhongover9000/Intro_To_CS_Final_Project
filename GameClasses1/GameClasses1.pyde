@@ -271,6 +271,7 @@ class Game:
         self.backgr = ["", "", ""]
         self.kirito = Player(0,0,0,0,500,345,0,60,"Krt",1)
         self.kirito.y = self.g - (self.kirito.h)
+        self.state = "game"
         
         #Loading Background Images from /images/background
         for i in (range(3)): #[0, 1, 2]
@@ -302,12 +303,15 @@ class Game:
         textSize(20)
         text("Click to reduce health, for testing", 10, 30)
         
+        #Game over
         self.gameOverCheck()
 
     def gameOverCheck(self):
         if self.kirito.health == 0:
-            self.gameOver = True
-            text("GAME OVER", 100, 100)
+            self.state = "gameover"
+            
+    def reset(self):
+        self.kirito.health = 100
             
 g = Game(1080,720,640)
 
@@ -319,14 +323,33 @@ def setup():
 
 def draw():
     background(0)
-    g.display()
+    if g.state == "game":
+        g.display()
+        
+    elif g.state == "gameover":
+        fill(255, 0, 0)
+        textSize(80)
+        text("YOU DIED", 350, 350)
+        textSize(30)
+        
+        if 460 < mouseX < 610 and 420 < mouseY < 460:
+            fill(255,0,0)
+        else:
+            fill(255, 255, 255)
+        text("Continue?", 460, 450)
 
 def mouseClicked():
     #For testing purposes
     if mouseButton == LEFT:
         g.kirito.health -= 10
         print(g.kirito.health)
-
+        
+        #Restarting the game
+        if g.state == "gameover":
+            if 460 < mouseX < 610 and 420 < mouseY < 460:
+                g.state = "game"
+                g.reset() #RESET THE GAME
+                
 def keyPressed():
     if keyCode == 83:
         if g.kirito.y + g.kirito.h == g.g and g.kirito.status != "defending":
