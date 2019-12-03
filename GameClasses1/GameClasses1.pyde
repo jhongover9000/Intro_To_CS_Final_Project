@@ -30,7 +30,7 @@ class Entity:
             return True
 
     def display(self):
-        self.update() 
+        self.update() #What does this do?
         
         #displays hitbox (for verification only)
         stroke(255)
@@ -49,7 +49,7 @@ class Player(Entity):
         self.direction = {"left":False, "right":False, "up":False}
         self.r = r
         self.maxhealth = 100 #Maximum health of Kirito!
-        self.health = self.maxhealth
+        self.health = self.maxhealth #Health 
         self.attack = 50
         self.mp = 10
         self.experience = 0
@@ -61,7 +61,7 @@ class Player(Entity):
         self.lastAction = "still"
         self.action = "still"
         self.up = True
-        self.hitRangex = range(int((self.x + self.w) - (self.w/8)),(int(self.x + self.w)+(self.w/8)))
+        self.hitRangex = range(int((self.x + self.w) - (self.w/8)),(int(self.x + self.w)+(self.w/8))) #Is this why Kirito starting position not at 0,0?
         self.hitRangey = range(int((self.y + self.h) - ((self.h/2)*0.3125)),int((self.y + self.h) + ((self.h/2)*1.231)))
         self.moveCounter = 0
 
@@ -117,7 +117,7 @@ class Player(Entity):
         if self.up == False:
             self.vx = 0
             
-        #player cannot move when defending or attacking (unless the attack specifically make the player move)
+    #player cannot move when defending or attacking (unless the attack specifically make the player move)
         if self.status == ("attacking" or "defending"):
             self.vx = 0
                 
@@ -205,6 +205,11 @@ class Player(Entity):
         else:
             self.buffer = "_0"
         
+        print(self.x, g.w/2)
+        
+        #SELF.X DOESN'T START FROM 0,0
+        if self.x >= g.w / 2:
+            g.middlex += self.vx
             
         self.imgPath = self.imgPath + self.buffer + str(self.framePoint) + ".png"
         
@@ -212,11 +217,13 @@ class Player(Entity):
         self.lastAction = self.action
         #final verifications
         #print(self.framePoint)
+        '''
         print(self.action)
         print(self.imgPath)
         print(self.status)
         print(self.dir)
         print(self.up)
+        '''
         #for i in range(2):
             #print(self.hitRangex[i])
             #print(self.hitRangey[i])
@@ -228,6 +235,21 @@ class Player(Entity):
             #Take less damage, write this code here
         else:
             self.health -= dmg
+            
+    def display(self):
+        self.update() 
+        
+        #displays hitbox (for verification only)
+        stroke(255)
+        noFill()
+        strokeWeight(3)
+        rect(self.hitRangex[0],self.hitRangey[0],(self.hitRangex[-1]-self.hitRangex[0]),(self.hitRangey[-1]-self.hitRangey[0]))
+     
+    #Cropping to flip Kirito's Image        
+        if self.dir >= 0:
+            image(self.img,self.x - g.middlex,self.y,self.w,self.h) #Subtracting middle x to keep Kirito in middle of screen! (middlex starts at 0)
+        elif self.dir < 0:
+            image(self.img,self.x - g.middlex,self.y,self.w,self.h,928,0,0,640)
     
 class Enemy(Entity):
     def __init__(self,x,y,vx,vy,w,h,r,f,img,d): #added radius to Enemy
@@ -267,9 +289,10 @@ class Game:
         self.w = w
         self.h = h
         self.g = g
+        self.middlex = 0
         self.frames = 0
         self.backgr = ["", "", ""]
-        self.kirito = Player(0,0,0,0,500,345,0,60,"Krt",1)
+        self.kirito = Player(0,0,0,0,500,345,0,60,"Krt",1) #x,y,vx,vy,w,h,r,f,img,d
         self.kirito.y = self.g - (self.kirito.h)
         self.state = "game"
         
@@ -281,6 +304,27 @@ class Game:
         for img in self.backgr:
             image(img, 0, 0, self.w, self.h)
         self.frames +=1
+        cnt = 3
+        
+#FROM MARIO GAME
+        for img in self.backgr:
+            
+            #print(self.middlex, cnt, self.w)
+            x = (self.middlex//cnt) % self.w #always 0, self.x is 0 until mario reaches the middle of screen
+            #Remainder always resets x after it passes the 'width' --> 1280%1280 = 0, 1281%1280 = 1 ...
+            #img5 has the highest x! -> 
+            
+            #UNDERSTAND THIS CODE
+            #print(x)
+            #print(self.middlex, x, self.w-x+1, self.w-x)
+            #image(img, x, y, width, height, x1, y1, x2, y2) //// (x1, y1) -> upper left, (x2, y2) -> lower right
+            #UL: (x-1, 0), LR:(self.w, self.h)
+            image (img,0,0,self.w-x+1,self.h,x-1,0,self.w,self.h) #displayed first, loads right half of mario image, shorter width
+            
+            #UL: (0,0), LR: (x, self.h)
+            image (img,self.w-x,0,x,self.h,0,0,x,self.h) #loads the left half of mario image, shorter width
+            cnt -= 1
+            
         self.kirito.display()
         
         #Displaying Player Stats
@@ -292,8 +336,8 @@ class Game:
             fill(255, 0, 0)
         else:
             fill(255, 200, 0)
-            
         self.newwidth = (float(self.kirito.health) / self.kirito.maxhealth) * 200 #Percentage of max health
+        #Health Bar Outline
         rect(100, 100, self.newwidth, 50)
         stroke(1)
         noFill()
@@ -302,6 +346,7 @@ class Game:
         #For testing purposes
         textSize(20)
         text("Click to reduce health, for testing", 10, 30)
+        
         
         #Game over
         self.gameOverCheck()
@@ -323,9 +368,11 @@ def setup():
 
 def draw():
     background(0)
+    #Game state to run the game
     if g.state == "game":
         g.display()
-        
+    
+    #Gameover state to check for gameover
     elif g.state == "gameover":
         fill(255, 0, 0)
         textSize(80)
@@ -344,7 +391,7 @@ def mouseClicked():
         g.kirito.health -= 10
         print(g.kirito.health)
         
-        #Restarting the game
+        #Restarting the game after gameover
         if g.state == "gameover":
             if 460 < mouseX < 610 and 420 < mouseY < 460:
                 g.state = "game"
