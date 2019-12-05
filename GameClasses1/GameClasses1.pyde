@@ -52,7 +52,9 @@ class Player(Entity):
         self.health = self.maxhealth #Health 
         self.attack = 50
         self.mp = 10
+        self.maxmp = 50
         self.experience = 0
+        self.maxexp = 100
         self.level = 1
         #when passive or attacking, you still take damage. passive = knockback, attack = only lose health
         self.status = "passive" #"passive", "attacking", "defending"
@@ -114,6 +116,8 @@ class Player(Entity):
             self.vx = 0
             if self.action == ("walk" or "jump"):
                 self.action = "still"
+                
+        
         if self.up == False:
             self.vx = 0
             
@@ -133,6 +137,9 @@ class Player(Entity):
         self.y += self.vy
         
     #updates hitbox
+        #int((self.x + self.w/2) - (self.w/8))
+        #(int(self.x + self.w/2)+(self.w/8))
+        #How does the hitbox work?
         self.hitRangex = range(int((self.x + self.w/2) - (self.w/8)),(int(self.x + self.w/2)+(self.w/8)))
         self.hitRangey = range(int((self.y + self.h/2) - ((self.h/2)*0.3125)),int((self.y + self.h/2) + ((self.h/2)*0.8125)))
         if self.up == False:
@@ -205,14 +212,13 @@ class Player(Entity):
         else:
             self.buffer = "_0"
         
-        print(self.x, g.w/2)
-        
-        #SELF.X DOESN'T START FROM 0,0
-        if self.x >= g.w / 2:
+    #KEEPING KIRITO CENTERED
+        if self.x >= g.w / 3.5: #divide by 3.5 to keep in center of screen
             g.middlex += self.vx
-            
+            #print(self.x, g.w/3.5)
+    
+    #LOADING KIRITO IMAGES    
         self.imgPath = self.imgPath + self.buffer + str(self.framePoint) + ".png"
-        
         self.img = loadImage(self.imgPath)
         self.lastAction = self.action
         #final verifications
@@ -234,7 +240,7 @@ class Player(Entity):
             pass
             #Take less damage, write this code here
         else:
-            self.health -= dmg
+            self.health -= self.dmg
             
     def display(self):
         self.update() 
@@ -243,6 +249,7 @@ class Player(Entity):
         stroke(255)
         noFill()
         strokeWeight(3)
+        #rect(x,y,w,h)
         rect(self.hitRangex[0],self.hitRangey[0],(self.hitRangex[-1]-self.hitRangex[0]),(self.hitRangey[-1]-self.hitRangey[0]))
      
     #Cropping to flip Kirito's Image        
@@ -252,10 +259,12 @@ class Player(Entity):
             image(self.img,self.x - g.middlex,self.y,self.w,self.h,928,0,0,640)
     
 class Enemy(Entity):
-    def __init__(self,x,y,vx,vy,w,h,r,f,img,d): #added radius to Enemy
+    def __init__(self,x,y,vx,vy,w,h,r,f,img,d, bound1, bound2): #added radius to Enemy
         Entity.__init__(self,x,y,vx,vy,w,h,f,img,d)
         self.hitRangex = range(int((self.x + self.w) - (self.w/8)),(int(self.x + self.w)+(self.w/8)))
         self.hitRangey = range(int((self.y + self.h) - ((self.h/2)*0.3125)),int((self.y + self.h) + ((self.h/2)*1.231))) 
+        self.b1 = bound1
+        self.b2 = bound2
         self.r = r
         self.health = 100
         self.attack = 50 #DEPENDS ON DIFFICULTY
@@ -264,8 +273,22 @@ class Enemy(Entity):
         self.action = "still" #still, patrol or attack?
 
     def update(self):
-        self.attackPlayer()
+        self.gravity()     
+        self.display()
         
+        if self.x <= self.b1: #hits left bound
+            self.vx = 3
+        elif self.x >= self.b2: #hit right bound
+            self.vx = -3
+            
+        self.x += self.vx
+        #self.attackPlayer()
+    
+    def display(self):
+        print(self.x, self.y + g.g, self.r) #Keeping enemy on the ground
+        fill(255,255,255)
+        ellipse(self.x, self.y, self.w, self.h) #x,y,w,h
+    
     #MELEE ATTACKING
     def attackPlayer(self):
         if self.distance() <= self.r + g.kirito.r: #if enemy radius and kirito radius next to each other
@@ -293,7 +316,11 @@ class Game:
         self.frames = 0
         self.backgr = ["", "", ""]
         self.kirito = Player(0,0,0,0,500,345,0,60,"Krt",1) #x,y,vx,vy,w,h,r,f,img,d
-        self.kirito.y = self.g - (self.kirito.h)
+        self.kirito.y = self.g - (self.kirito.h) #Keeps kirito on ground
+        
+        #Testing out enemy
+        self.enemy1 = Enemy(500,0,3,0,100,120,100,60,"enemy",1,300,900)
+        self.enemy1.y = self.g - (self.enemy1.h)
         self.state = "game"
         
         #Loading Background Images from /images/background
@@ -326,27 +353,54 @@ class Game:
             cnt -= 1
             
         self.kirito.display()
-        
-        #Displaying Player Stats
-        #Health bar
+        self.enemy1.update()
+        self.displayStats()
+      
+    #Displaying Player Stats  
+    def displayStats(self):
+        #HEALTH BAR
         noStroke()
         if self.kirito.health > 50:
-            fill(0, 255, 0)
+            fill(0, 255, 0) #Green
         elif self.kirito.health < 25:
-            fill(255, 0, 0)
+            fill(255, 0, 0) #Red
         else:
-            fill(255, 200, 0)
+            fill(255, 200, 0) #Yellow
         self.newwidth = (float(self.kirito.health) / self.kirito.maxhealth) * 200 #Percentage of max health
         #Health Bar Outline
-        rect(100, 100, self.newwidth, 50)
+        rect(150, 30, self.newwidth, 50, 30)
         stroke(1)
         noFill()
-        rect(100, 100, 200, 50) #x,y,w,h
+        rect(150, 30, 200, 50, 30) #x,y,w,h,r
         
         #For testing purposes
         textSize(20)
-        text("Click to reduce health, for testing", 10, 30)
+        text("Click to reduce health, for testing", 500, 30) 
         
+        #MANA BAR (MP)
+        noStroke()
+        fill(0, 0, 255) #Blue
+        self.newwidth = (float(self.kirito.mp) / self.kirito.maxmp) * 200 #Percentage of max health
+        #Mana Bar Outline
+        rect(150, 100, self.newwidth, 20, 20)
+        stroke(1)
+        noFill()
+        rect(150, 100, 200, 20, 20) #x,y,w,h,r
+        
+        #EXPERIENCE TRACKER
+        noStroke()
+        fill(173, 216, 255) #Blue
+        self.newwidth = (float(self.kirito.experience) / self.kirito.maxexp) * 300 #Percentage of max health
+        #Experience
+        rect(150, 10, self.newwidth, 10, 5)
+        stroke(1)
+        noFill()
+        rect(150, 10, 300, 10, 5) #x,y,w,h,r
+        
+        #For testing purposes
+        fill(0, 255, 0)
+        textSize(20)
+        text("Click to reduce health, for testing", 500, 30) 
         
         #Game over
         self.gameOverCheck()
@@ -359,7 +413,6 @@ class Game:
         self.kirito.health = 100
             
 g = Game(1080,720,640)
-
 
 def setup():
     loadImage(path+"/images/single")
@@ -388,8 +441,8 @@ def draw():
 def mouseClicked():
     #For testing purposes
     if mouseButton == LEFT:
-        g.kirito.health -= 10
-        print(g.kirito.health)
+        g.kirito.experience += 10
+        print(g.kirito.experience)
         
         #Restarting the game after gameover
         if g.state == "gameover":
@@ -398,44 +451,45 @@ def mouseClicked():
                 g.reset() #RESET THE GAME
                 
 def keyPressed():
-    if keyCode == 83:
+    if keyCode == 83: #s
+        #something wrong with this code?
         if g.kirito.y + g.kirito.h == g.g and g.kirito.status != "defending":
             g.kirito.up = False
         
-    elif keyCode == 87:
+    elif keyCode == 87: #w
         if g.kirito.status != "defending":
             g.kirito.direction["up"] = True
         
-    elif keyCode == 65:
+    elif keyCode == 65: #a
         if g.kirito.status != "defending":
             g.kirito.direction["left"] = True
     
-    elif keyCode == 68:
+    elif keyCode == 68: #d
         if g.kirito.status != "defending":
             g.kirito.direction["right"] = True
     
-    elif keyCode == 76:
+    elif keyCode == 76: #l
         if g.kirito.status != "defending":
             g.kirito.status = "attacking"
             g.kirito.action = "normalATK"
             
-    elif keyCode == 74:
+    elif keyCode == 74: #j
         if g.kirito.status != "defending" and g.kirito.up == True:
             g.kirito.status = "attacking"
             g.kirito.action = "knockBack"
         
-    elif keyCode == 75:
+    elif keyCode == 75: #k
         if g.kirito.status != "defending" and g.kirito.up == True:
             g.kirito.status = "attacking"
             g.kirito.action = "throw"
         
-    elif keyCode == 32:
+    elif keyCode == 32: #space?
         g.kirito.vx = 0
         g.kirito.status = "defending"
         g.kirito.action = "block"
 
 def keyReleased():
-    if keyCode == 83:
+    if keyCode == 83: #s
         g.kirito.up = True
         
     elif keyCode == 87:    #up(w)
