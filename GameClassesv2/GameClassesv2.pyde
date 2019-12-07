@@ -50,7 +50,7 @@ class Entity:
         
     def gravity(self):
         if self.y + self.h < g.g:
-           self.vy += 0.4
+           self.vy += 0.3
         elif self.y + self.h >= g.g:
             self.vy = g.g - (self.y + self.h)
             if self.y + self.h > g.g:
@@ -89,6 +89,7 @@ class Player(Entity):
         self.mp = 20
         self.experience = 0
         self.level = 1
+        self.shieldHealth = 100
         
         #image attributes (dictionaries for images and frame count; made to ensure that random commands won't crash game)
         self.kiritoImages = kiritoImagesSingle
@@ -188,7 +189,7 @@ class Player(Entity):
         #move back to "still" if no keys are pressed    
         if (self.direction["up"] == False) and (self.direction["left"] == False) and (self.direction["right"] == False):
             self.vx = 0
-            if self.action == ("walk" or "jump"):
+            if self.lastAction == ("walk" or "jump"):
                 self.action = "still"
         #velocity is 0 when object ducks
         if self.direction["down"]:
@@ -196,14 +197,25 @@ class Player(Entity):
         #velocity is 0 when player is attacking or defending    
         if self.status == ("attacking" or "defending"):
             self.vx = 0
+         
+        #keep player from moving off screen   
+        if self.x + self.w/2 <= 0 and self.dir == -1:
+            self.vx = 0
             
         #updates final position of object
         self.x += self.vx
         self.y += self.vy
         
         #updates hitbox
-        self.hitRangex = range(int((self.x + self.w/2) - (self.w/8)),(int(self.x + self.w/2)+(self.w/8)))
-        self.hitRangey = range(int((self.y + self.h/2) - ((self.h/2)*0.3125)),int((self.y + self.h/2) + ((self.h/2)*0.8125)))
+        if self.x < 0 and self.x > -(self.x/2):
+            self.hitRangex = range(int((-self.x + self.w/2) - (self.w/8)),((self.w/8)))
+            self.hitRangey = range(int((self.y + self.h/2) - ((self.h/2)*0.3125)),int((self.y%g.w + self.h/2) + ((self.h/2)*0.8125)))
+        elif self.x + self.w/2 > 0 and self.x + self.w/2 <= g.w/2:
+            self.hitRangex = range(int((self.x + self.w/2) - (self.w/8)),(int(self.x%g.w + self.w/2)+(self.w/8)))
+            self.hitRangey = range(int((self.y + self.h/2) - ((self.h/2)*0.3125)),int((self.y%g.w + self.h/2) + ((self.h/2)*0.8125)))
+        elif self.x + self.w/2 > g.w/2:
+            self.hitRangex = range(int((g.w/2) - (self.w/8)),(int(g.w/2)+(self.w/8)))
+            self.hitRangey = range(int((self.y + self.h/2) - ((self.h/2)*0.3125)),int((self.y%g.w + self.h/2) + ((self.h/2)*0.8125)))
         if self.direction["down"]:
             self.hitRangey = range(int(self.y + (self.h/2*1.125)),int((self.y + self.h/2) + ((self.h/2)*0.8125)))
             
@@ -259,6 +271,44 @@ class Player(Entity):
 
 
 #create class Enemy, derived from class Entity
+class Enemy(Entity):
+    def __init__(self,x,y,vx,vy,w,h,f,d,health,a,type):
+        Entity.__init__(self,x,y,vx,vy,w,h,f,d)
+        
+        #type of enemy; "melee" and "ranged"
+        self.type = type
+        
+        #movement dictionaries for enemies
+        
+        self.moveDictPathMelee = {"still": "000", "walk":"400", "jump":"200", "block":"500", "normalATK":"001", "knockBack":"003", "throw":"990", "hit":"508"}
+        self.moveDictFramesMelee = {"still":7, "walk":5, "jump":6, "block":2, "normalATK":3, "knockBack":6, "throw":5, "hit":3}
+        #uses Quen images
+        self.moveDictPathRanged = {"still": "000", "attack":"301", "hit":"508"}
+        self.moveDictFramesRanged = {"still":1, "attack":3, "hit":3}
+        
+        #stats (stages will have multipliers on these stats)
+        self.health = health   #defined later in stages as 100*g.difficulty*stagenumber.multiplier + stage.levelAddition
+        self.attack = a   #defined later in stages as 50*g.difficulty*stagenumber.multiplier + stage.levelAddition
+        
+        #hitbox
+        if self.x <= 720:
+            self.hitRangex = range(int((self.x + self.w) - (self.w/8)),(int(self.x + self.w)+(self.w/8)))
+            self.hitRangey = range(int((self.y + self.h) - ((self.h/2)*0.3125)),int((self.y + self.h) + ((self.h/2)*1.231)))
+        
+        
+    def attackPlayer(self):
+        if self.type == "melee":
+            if (self.x > g.kirito.x) and (self.x - g.kirito.x < self.w//3):
+                self.action = "attack"
+            
+    def update(self):
+        if self.x > g.kirito.x:
+            self.dir = -1
+        elif self.x < g.kirito.x:
+            self.dir = 1
+        elif self.x == g.kirito.x:
+            self.attackPlayer()
+        
 
 #create class Projectile, derived from class Entity; this is the projectile throw by player
 
@@ -287,9 +337,10 @@ class Game:
         self.h = h
         self.g = g
         self.frames = 0
+        self.state = "game"
 
 
-        self.kirito = Player(0,0,0,0,500,345,0,1)
+        self.kirito = Player(900,0,0,0,500,345,0,1)
         self.kirito.y = self.g - (self.kirito.h)
 
     def display(self):
@@ -335,7 +386,22 @@ def setup():
         
 def draw():
     background(0)
-    g.display()
+    #Game state to run the game
+    if g.state == "game":
+        g.display()
+    
+    #Gameover state to check for gameover
+    elif g.state == "gameover":
+        fill(255, 0, 0)
+        textSize(80)
+        text("YOU DIED", 350, 350)
+        textSize(30)
+        
+        if 460 < mouseX < 610 and 420 < mouseY < 460:
+            fill(255,0,0)
+        else:
+            fill(255, 255, 255)
+        text("Continue?", 460, 450)
         
 ###################################################################################################################################################################################################
 #KEYBOARD CONTROL AND RESET
