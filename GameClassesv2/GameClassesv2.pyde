@@ -10,11 +10,10 @@ kiritoSingle = []
 for file in os.listdir(path + "/images/Kirito/single/"):
     kiritoSingle.append(file)
 kiritoSingle.sort()
-kiritoSingle.remove(kiritoSingle[0])
 kiritoImagesSingle = {}
 for file in kiritoSingle:
         kiritoImagesSingle[file] = loadImage(path + "/images/Kirito/single/" + str(file))
-#print(kiritoImagesSingle)
+print(kiritoImagesSingle.keys())
 
 kiritoDual = []
 for file in os.listdir(path + "/images/Kirito/dual/"):
@@ -32,6 +31,12 @@ for file in kiritoDual:
 #asuna images
 
 #enemy images
+
+
+#background images
+
+#
+
 
 ###################################################################################################################################################################################################
 #MOVING OBJECTS
@@ -73,22 +78,24 @@ class Entity:
         strokeWeight(3)
         rect(self.hitRangex[0],self.hitRangey[0],(self.hitRangex[-1]-self.hitRangex[0]),(self.hitRangey[-1]-self.hitRangey[0]))
         
-        if self.dir >= 0:
-            image(self.img,self.x,self.y,self.w,self.h)
+        if self.dir > 0:
+            image(self.img,self.x-g.x, self.y-self.h//2,self.w,self.h)
         elif self.dir < 0:
-            image(self.img,self.x,self.y,self.w,self.h,928,0,0,640)
-        
+            image(self.img,self.x-g.x,self.y-self.h//2,self.w,self.h)
 #create class Player, derived from class Entity
 class Player(Entity):
     def __init__(self,x,y,vx,vy,w,h,f,d):
         Entity.__init__(self,x,y,vx,vy,w,h,f,d)
         
         #stats
-        self.health = 100
-        self.attack = 50
-        self.mp = 20
-        self.experience = 0
         self.level = 1
+        self.maxHealth = 100
+        self.health = self.maxHealth
+        self.attack = 50
+        self.maxMP = 20
+        self.mp = self.maxMP
+        self.maxXP = 100
+        self.experience = 20
         self.shieldHealth = 100
         
         #image attributes (dictionaries for images and frame count; made to ensure that random commands won't crash game)
@@ -206,26 +213,39 @@ class Player(Entity):
         self.x += self.vx
         self.y += self.vy
         
-        #updates hitbox
-        if self.x < 0 and self.x > -(self.x/2):
-            self.hitRangex = range(int((-self.x + self.w/2) - (self.w/8)),((self.w/8)))
-            self.hitRangey = range(int((self.y + self.h/2) - ((self.h/2)*0.3125)),int((self.y%g.w + self.h/2) + ((self.h/2)*0.8125)))
-        elif self.x + self.w/2 > 0 and self.x + self.w/2 <= g.w/2:
-            self.hitRangex = range(int((self.x + self.w/2) - (self.w/8)),(int(self.x%g.w + self.w/2)+(self.w/8)))
-            self.hitRangey = range(int((self.y + self.h/2) - ((self.h/2)*0.3125)),int((self.y%g.w + self.h/2) + ((self.h/2)*0.8125)))
-        elif self.x + self.w/2 > g.w/2:
-            self.hitRangex = range(int((g.w/2) - (self.w/8)),(int(g.w/2)+(self.w/8)))
-            self.hitRangey = range(int((self.y + self.h/2) - ((self.h/2)*0.3125)),int((self.y%g.w + self.h/2) + ((self.h/2)*0.8125)))
+        #moves game screen along
+        if (self.x + self.w/2) >= g.w // 2:
+            g.x += self.vx
+        
+        #hitbox components
+        x1 = (self.x + self.w/2) - (self.w/8)
+        x2 = (self.x%g.w + self.w/2)+(self.w/8)
+        y1 = (self.y + self.h/2) - ((self.h/2)*0.3125)
+        y2 = (self.y + self.h/2) + ((self.h/2)*0.8125)
+        
+        if self.x >= 0 and (self.x + self.w/2) < g.w/2:   #if between starting point and middle
+            x1 = (self.x + self.w/2) - (self.w/8)
+            x2 = (self.x%g.w + self.w/2) + (self.w/8)
+            y1 = (self.y + self.h/2) - ((self.h/2)*0.3125)
+            y2 = (self.y + self.h/2) + ((self.h/2)*0.8125)
+        elif (self.x + self.w/2) >= g.w/2:     #if self.x + self.w/2 goes beyond midpoint
+            x1 = (g.w/2) - (self.w/8)
+            x2 = (g.w/2) + (self.w/8)
+            y1 = (self.y + self.h/2) - ((self.h/2)*0.3125)
+            y2 = (self.y + self.h/2) + ((self.h/2)*0.8125)
         if self.direction["down"]:
-            self.hitRangey = range(int(self.y + (self.h/2*1.125)),int((self.y + self.h/2) + ((self.h/2)*0.8125)))
+            y1 = self.y + (self.h/2*1.125)
+            y2 = (self.y + self.h/2) + ((self.h/2)*0.8125)
             
         #reach extends when attacking (all g.enemies in range will be hit)
         if self.status == "attacking":
             if self.dir > 0:
-                self.hitRangex = range(int((self.x + self.w/2) - (self.w/8)),(int(self.x + self.w/2)+(self.w/3)))
+                x2 += self.w/4
             elif self.dir < 0:
-                self.hitRangex = range(int((self.x + self.w/2) - (self.w/3)),(int(self.x + self.w/2)+(self.w/8)))
-
+                x1 -= self.w/4
+                
+        self.hitRangex = range(int(x1),int(x2))
+        self.hitRangey = range(int(y1),int(y2))
         #choosing the speeds of the animations for each action
         self.f += 0.028*self.moveFrames[self.action]
         
@@ -257,6 +277,11 @@ class Player(Entity):
         #final tweaks
         self.lastAction = self.action
         
+        #update stats
+        self.maxHealth = 100 + 10*(self.level-1)
+        self.maxMP = 20 + 10*(self.level-1)
+        self.maxXP = 100*1.3**(self.level-1)
+        
         #print(self.f)
         #print(self.framePoint)
         print(self.status)
@@ -267,6 +292,22 @@ class Player(Entity):
         #for i in range(2):
             #print(self.hitRangex[i])
             #print(self.hitRangey[i])
+            
+    def display(self):
+        self.update()
+    
+        #displays hitbox (for verification only)
+        stroke(255)
+        noFill()
+        strokeWeight(3)
+        rect(self.hitRangex[0],self.hitRangey[0],(self.hitRangex[-1]-self.hitRangex[0]),(self.hitRangey[-1]-self.hitRangey[0]))
+        
+
+        if self.dir >= 0:
+            image(self.img,self.x-g.x,self.y,self.w,self.h)
+        elif self.dir < 0:
+            image(self.img,self.x-g.x,self.y,self.w,self.h,928,0,0,640)
+        
 #create class Boss, derived from class Player
 
 
@@ -336,16 +377,88 @@ class Game:
         self.w = w
         self.h = h
         self.g = g
+        self.x = 0
         self.frames = 0
-        self.state = "game"
-
-
-        self.kirito = Player(900,0,0,0,500,345,0,1)
+        self.backgr = ["", "", ""]
+        self.kirito = Player(0,0,0,0,500,345,0,1) #x,y,vx,vy,w,h,f,d
         self.kirito.y = self.g - (self.kirito.h)
-
+        self.state = "game"
+        
+        #Loading Background Images from /images/background
+        for i in (range(3)): #[0, 1, 2]
+            self.backgr[i] = loadImage(path + "/images/Background/0" + str(i) + ".png")
+    
     def display(self):
+        for img in self.backgr:
+            image(img, 0, 0, self.w, self.h)
         self.frames +=1
+        cnt = 3
+        
+#FROM MARIO GAME
+        for img in self.backgr:
+            
+            #print(self.middlex, cnt, self.w)
+            x = (self.x//cnt) % self.w #always 0, self.x is 0 until mario reaches the middle of screen
+            #Remainder always resets x after it passes the 'width' --> 1280%1280 = 0, 1281%1280 = 1 ...
+            #img5 has the highest x! -> 
+            
+            #UNDERSTAND THIS CODE
+            #print(x)
+            #print(self.middlex, x, self.w-x+1, self.w-x)
+            #image(img, x, y, width, height, x1, y1, x2, y2) //// (x1, y1) -> upper left, (x2, y2) -> lower right
+            #UL: (x-1, 0), LR:(self.w, self.h)
+            image (img,0,0,self.w-x+1,self.h,x-1,0,self.w,self.h) #displayed first, loads right half of mario image, shorter width
+            
+            #UL: (0,0), LR: (x, self.h)
+            image (img,self.w-x,0,x,self.h,0,0,x,self.h) #loads the left half of mario image, shorter width
+            cnt -= 1
+            
         self.kirito.display()
+        
+        #Displaying Player Stats
+        #Health bar
+        noStroke()
+        if self.kirito.health > 50:
+            fill(0, 255, 0)
+        elif self.kirito.health < 25:
+            fill(255, 0, 0)
+        else:
+            fill(255, 200, 0)
+        self.newHealth = (float(self.kirito.health) / self.kirito.maxHealth) * 200 #Percentage of max health
+        #Health Bar Outline
+        rect(50, 50, self.newHealth, 15)
+        stroke(192)
+        noFill()
+        rect(50, 50, 200, 15) #x,y,w,h
+        
+        noStroke()
+        fill(0,0,255)
+        self.newMP = (float(self.kirito.mp) / self.kirito.maxMP) * 200 #Percentage of max health
+        #MP Bar Outline
+        rect(50, 75, self.newMP, 15)
+        stroke(192)
+        noFill()
+        rect(50, 75, 200, 15) #x,y,w,h
+        
+        noStroke()
+        fill(173,216,255)
+        self.newXP = (float(self.kirito.experience)%self.kirito.maxXP / self.kirito.maxXP) * 300 #Percentage of max health
+        #MP Bar Outline
+        rect(50, 30, self.newXP, 10, 3)
+        stroke(192)
+        noFill()
+        rect(50, 30, 300, 10, 3) #x,y,w,h
+        
+        
+        #Game over
+        self.gameOverCheck()
+
+    def gameOverCheck(self):
+        if self.kirito.health == 0:
+            self.state = "gameover"
+            
+    def reset(self):
+        self.kirito.health = 100
 
 
 
@@ -369,7 +482,6 @@ g = Game(1080,720,640)
 
 
 def setup():
-    loadImage(path+"/images/single")
     size(g.w,g.h)
     background(0)
 
