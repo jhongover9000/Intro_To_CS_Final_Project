@@ -88,6 +88,7 @@ class Entity:
         noFill()
         strokeWeight(3)
         rect(self.hitRangex[0],self.hitRangey[0],(self.hitRangex[-1]-self.hitRangex[0]),(self.hitRangey[-1]-self.hitRangey[0]))
+        print(self.hitRangex[0])
         
         if self.dir > 0:
             image(self.img,self.x-g.middlex, self.y-self.h//2,self.w,self.h)
@@ -134,10 +135,12 @@ class Player(Entity):
         self.direction = {"left":False, "right":False, "up":False, "down":False}
         self.dir = d
         
-        #hitbox
-        self.hitRangex = range(int((self.x + self.w) - (self.w/8)),(int(self.x + self.w)+(self.w/8)))
-        self.hitRangey = range(int((self.y + self.h) - ((self.h/2)*0.3125)),int((self.y + self.h) + ((self.h/2)*1.231)))
-
+        #hitbox components
+        self.x1 = (self.x + self.w/2) - (self.w/8)
+        self.x2 = (self.x + self.w/2) + (self.w/8)
+        self.y1 = (self.y + self.h/2) - ((self.h/2)*0.3125)
+        self.y2 = (self.y + self.h/2) + ((self.h/2)*0.8125)
+        
         #action calling for dictionaries, plus status update
         self.lastAction = "still"
         self.action = "still"
@@ -260,35 +263,33 @@ class Player(Entity):
         self.y += self.vy
         
         #moves game screen along
-        if (self.x + self.w/2) >= g.w // 2:
+        if (self.x + self.w/2) > g.w//2:
             g.middlex += self.vx
+        elif (self.x + self.w/2) == g.w//2:
+            g.middlex = 0
         
-        #hitbox components
-        x1 = (self.x + self.w/2) - (self.w/8)
-        x2 = (self.x%g.w + self.w/2)+(self.w/8)
-        y1 = (self.y + self.h/2) - ((self.h/2)*0.3125)
-        y2 = (self.y + self.h/2) + ((self.h/2)*0.8125)
+
         if self.x < 0:
-            x1 = (self.x + self.w) - self.w/2 - self.w/8
-            x2 = (self.x + self.w) - self.w/2 + self.w/8
-        elif self.x >= 0 and (self.x + self.w/2) < g.w/2:   #if between starting point and middle
-            x1 = (self.x + self.w/2) - (self.w/8)
-            x2 = (self.x%g.w + self.w/2) + (self.w/8)
-        elif (self.x + self.w/2) >= g.w/2:     #if self.x + self.w/2 goes beyond midpoint
-            x1 = (g.w/2) - (self.w/8)
-            x2 = (g.w/2) + (self.w/8)
+            self.x1 = (self.x + self.w) - self.w/2 - self.w/8
+            self.x2 = (self.x + self.w) - self.w/2 + self.w/8
+        elif self.x >= 0 and (self.x + self.w/2) <= g.w/2:   #if between starting point and middle
+            self.x1 = (self.x + self.w/2) - (self.w/8)
+            self.x2 = (self.x%g.w + self.w/2) + (self.w/8)
+        elif (self.x + self.w/2) > g.w/2:     #if self.x + self.w/2 goes beyond midpoint
+            self.x1 = (g.w/2) - (self.w/8)
+            self.x2 = (g.w/2) + (self.w/8)
         if self.direction["down"]:
-            y1 = self.y + (self.h/2*1.125)
-            y2 = (self.y + self.h/2) + ((self.h/2)*0.8125)   
+            self.y1 = self.y + (self.h/2*1.125)
+            self.y2 = (self.y + self.h/2) + ((self.h/2)*0.8125)   
         #reach extends when attacking (all g.enemies in range will be hit)
         if self.status == "attacking":
             if self.dir > 0:
-                x2 += self.w/4
+                self.x2 += self.w/4
             elif self.dir < 0:
-                x1 -= self.w/4
+                self.x1 -= self.w/4
         #create hitbox        
-        self.hitRangex = range(int(x1),int(x2))
-        self.hitRangey = range(int(y1),int(y2))
+        self.hitRangex = range(int(self.x1),int(self.x2))
+        self.hitRangey = range(int(self.y1),int(self.y2))
         #choosing the speeds of the animations for each action
         self.f += 0.035*self.moveFrames[self.action]
         
@@ -362,7 +363,7 @@ class Player(Entity):
         noFill()
         strokeWeight(3)
         rect(self.hitRangex[0],self.hitRangey[0],(self.hitRangex[-1]-self.hitRangex[0]),(self.hitRangey[-1]-self.hitRangey[0]))
-        
+        print(self.hitRangex[0])
 
         if self.dir >= 0:
             image(self.img,self.x-g.middlex,self.y,self.w,self.h)
@@ -438,7 +439,7 @@ class Projectile(Entity):
     def update(self):
         #accelerates with time
         self.count +=1
-        #self.x += self.vx + 1.5*self.count
+        self.x += self.vx + 1.5*self.count
         
     def display(self):
         self.update()
