@@ -379,50 +379,74 @@ class Player(Entity):
 class Enemy(Entity):
     def __init__(self,x,y,vx,vy,w,h,f,d,health,a,type):
         Entity.__init__(self,x,y,vx,vy,w,h,f,d)
-        
         #type of enemy; "melee" and "ranged"
         self.type = type
         
         #movement dictionaries for enemies
         
-        self.moveDictPathMelee = {"still": "000", "walk":"400", "attack":"001", "hit":"508"}
-        self.moveDictFramesMelee = {"still":7, "walk":5, "attack":3, "hit":3}
+        self.moveDictPathMelee = {"still": "000", "walk":"400", "jump":"200", "block":"500", "normalATK":"001", "knockBack":"003", "throw":"990", "hit":"508"}
+        self.moveDictFramesMelee = {"still":7, "walk":5, "jump":6, "block":2, "normalATK":3, "knockBack":6, "throw":5, "hit":3}
         #uses Quen images
         self.moveDictPathRanged = {"still": "000", "attack":"301", "hit":"508"}
         self.moveDictFramesRanged = {"still":1, "attack":3, "hit":3}
         
         #stats (stages will have multipliers on these stats)
         self.health = health   #defined later in stages as 100*g.difficulty*stagenumber.multiplier + stage.levelAddition
-        self.attack = a   #defined later in stages as 10*g.difficulty*stagenumber.multiplier + stage.levelAddition
+        self.maxhealth = health
+        self.attack = a   #defined later in stages as 50*g.difficulty*stagenumber.multiplier + stage.levelAddition
         
-        #hitbox
-        if self.x <= 720:
-            self.hitRangex = range(int((self.x + self.w) - (self.w/8)),(int(self.x + self.w)+(self.w/8)))
-            self.hitRangey = range(int((self.y + self.h) - ((self.h/2)*0.3125)),int((self.y + self.h) + ((self.h/2)*1.231)))
+        #Enemy hitbox
+        self.hitRangex = range(int((self.x + self.w) - (self.w/8)),(int(self.x + self.w)+(self.w/8)))
+        self.hitRangey = range(int((self.y + self.h) - ((self.h/2)*0.3125)),int((self.y + self.h) + ((self.h/2)*1.231)))
+
+    def display(self):
+        self.update()
+        #Diplaying the enemy
+        rect(self.x - g.middlex, self.y, self.w, self.h) #x,y,w,h
         
+        #Enemy health bar
+        noStroke()
+        if self.health > (self.maxhealth//2): #50% health or more
+            fill(0, 255, 0)
+        elif self.health < (self.maxhealth//4): #25% Health or less
+            fill(255, 0, 0)
+        else:
+            fill(255, 200, 0) #25% - 50% health
+        self.newHealth = (float(self.health) / self.maxhealth) * self.w #Percentage of max health
+        
+        #Health Bar Display
+        rect(self.x - g.middlex, self.y - 10, self.newHealth, 5) #Displays above enemy postion
+        print(g.kirito.x + 200, self.x, self.y - 10)
+        stroke(192)
+        noFill()
+        rect(self.x - g.middlex, self.y - 10, self.w, 5) #x,y,w,h, subtract middle x to keep above when Kirito in middle!
+        
+        self.x += self.vx
+        self.y += self.vy
+            
         
     def attackPlayer(self):
         if self.type == "melee":
-            if (self.x > g.kirito.x) and (self.x - g.kirito.x < self.w//3):
+            print(self.x, g.kirito.x, self.x - g.kirito.x, self.w//3)
+            if (self.x > g.kirito.x) and (self.x - (g.kirito.x + 200) < self.w//3):
+                print("TRUE")
                 self.action = "attack"
+                g.kirito.health -= self.attack
             
     def update(self):
-        if self.x > g.kirito.x:
+        self.gravity()
+        if self.x > g.kirito.x + 200:
             self.dir = -1
-            self.vx = -3
-        elif self.x < g.kirito.x:
-            self.dir = 1
-            self.vx = 3
-        elif self.x == g.kirito.x:
-            self.attackPlayer()
             
-        #if hit, the enemies can't do anything, either    
-        if self.action != "hit":    
-            self.attackPlayer()
-                
-            if self.vx != 0:
-                self.action = "walk"
+        elif self.x < g.kirito.x + 200:
+            self.dir = 1
+        self.attackPlayer()
         
+        #Speed
+        if self.dir == -1:
+            self.vx = -2
+        elif self.dir == 1:
+            self.vx = 2
             
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-        
 
