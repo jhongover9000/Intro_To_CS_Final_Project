@@ -7,6 +7,14 @@ path = os.getcwd()
 
 #IMAGES: all loaded at the beginning to reduce memory usage
 
+#background images are divided into lists of moving parts and a background, which are used to create the stages
+backgrounds = {}
+for k in range(4):
+    backgroundSets = []
+    for file in os.listdir(path + "/images/Background/" + "0" + str(k)):
+        backgroundSets.append(loadImage(path + "/images/Background/" + "0" + str(k) + "/" + file))
+    backgrounds[k] = backgroundSets
+    
 #kirito images
 kiritoSingle = []
 for file in os.listdir(path + "/images/Kirito/single/"):
@@ -27,12 +35,13 @@ for file in kiritoDual:
 #print(kiritoImagesDual)
 
 #tatsuya images (boss1)
-tatsuya = []
-for file in os.listdir(path + "/images/Tatsuya/"):
-    tatsuya.append(file)
-tatsuyaImages = {}
-for file in tatsuya:
-        tatsuyaImages[file] = loadImage(path + "/images/Tatsuya/" + str(file))
+#tatsuya = []
+#for file in os.listdir(path + "/images/Tatsuya/"):
+#    tatsuya.append(file)
+#
+#tatsuyaImages = {}
+#for file in tatsuya:
+#        tatsuyaImages[file] = loadImage(path + "/images/Tatsuya/" + str(file))
 
 #asuna images
 asuna = []
@@ -43,7 +52,6 @@ asunaImages = {}
 for file in asuna:
         asunaImages[file] = loadImage(path + "/images/Asuna/" + str(file))
 
-
 #enemy images
 
 
@@ -51,16 +59,7 @@ for file in asuna:
 projectileImages = []
 
 
-#background images are divided into lists of moving parts and a background, which are used to create the stages
-backgrounds = {}
-for k in range(4):
-    backgroundSets = []
-    for file in os.listdir(path + "/images/Background/" + "0" + str(k)):
-        backgroundSets.append(loadImage(path + "/images/Background/" + "0" + str(k) + "/" + file))
-    backgroundSets.remove(backgroundSets[0])
-    backgrounds[k] = backgroundSets
 
-#
 
 
 ###################################################################################################################################################################################################
@@ -78,7 +77,7 @@ class Entity:
         self.w = w
         self.h = h
         self.f = f
-        self.d = d
+        self.dir = d
         
     def gravity(self):
         if self.y + self.h < g.g:
@@ -152,22 +151,25 @@ class Player(Entity):
         self.dir = d
         
         #hitbox components
+        #NOTICE: the y range of the hitbox is based on the location of the ground. If this changes, then CHANGE THE Y VALUES
         self.x1 = (self.x + self.w/2) - (self.w/8)
         self.x2 = (self.x + self.w/2) + (self.w/8)
-        self.y1 = (self.y + self.h/2) - ((self.h/2)*0.3125)
-        self.y2 = (self.y + self.h/2) + ((self.h/2)*0.8125)
         
         #action calling for dictionaries, plus status update
         self.lastAction = "still"
         self.action = "still"
         self.lastStatus = "passive"
         self.status = "passive" #divided into "passive", "attacking", "defending". passive = knockBack, attack = only lose health
-        self.hitCounter = 0
+        self.hitCounter = 0   #makes it so that player is immobilized for a short period of time
+        self.shieldCounter = 0   #displays shield health for short period of time
+        self.shieldBroken = False
+        self.shieldBrokenNotify = False    #triggers display saying "Shield Broken"
+        self.shieldBrokenCounter = 0    #displays "Shield Broken!" for certain period of time
+        self.mpLackingNotify = False    #triggers display saying "Not enough MP!"
         
     def update(self):
         self.gravity()
-        self.throwObject()
-        self.knockBackSlash()
+        self.shieldBrokenNotify
         
         #update movement dictionaries
         if self.dualWield == False:
@@ -188,6 +190,9 @@ class Player(Entity):
                 
         #if player is hit, they can't do anything for 20 frames
         if self.action == "hit":
+            if self.lastAction == "jump":
+                self.vy -= 1
+                self.vx -= self.dir*1
             if self.lastAction != "hit":
                 self.f = 0
             self.lastAction = "hit"
@@ -197,30 +202,40 @@ class Player(Entity):
                 self.hitCounter = 0
                                 
         #if the player presses random buttons while down (the ones that don't have any effects) they stay "passive"
-        if (self.action != ("still" or "normalATK" or "block" or "hit")) and self.direction["down"]:
+        if (self.direction["down"] == True) and self.action != ("still" or "normalATK" or "block" or "hit"):
             self.status = "passive"
+            
         #if attacking, then the entire animation needs to be completed before attempting a new one    
         if self.status == "attacking":
-            if self.lastAction != "still":
-                if self.framePoint < self.moveFrames[self.action]:
-                    self.action = self.lastAction
-                               
+            self.throwObject()
+            self.knockBackSlash()
+            if self.action != self.lastAction:
+                self.f = 0
+                self.lastAction = self.action
+            elif self.action == self.lastAction:
+                if self.f <= self.moveFrames[self.action]:
+                    self.lastAction = self.action
+                else:
+                    self.action = "still"
+                        
         #reset frames when actions change
         if self.action != self.lastAction:
             self.f = 0
-            
+        
+        self.lastAction = self.action
+        
         #basically, you can't do anything when hit.    
         if self.action != "hit":
             #changing status from attacking to passive and changing frames
             if self.status == "attacking":
-                if self.lastAction != self.action:
-                    self.f = 0
-                elif self.f >= self.moveFrames[self.action]:
-                    self.status = "passive"
-                    if self.gravity():
-                        self.action = "still"
-                    else:
-                        self.action = "jump"           
+                if self.action != "walk":
+                    if self.f >= self.moveFrames[self.action]:
+                        self.f = 0
+                        self.status = "passive"
+                        if self.gravity():
+                            self.action = "still"
+                        else:
+                            self.action = "jump"           
                         
             #to prevent glitch where player keeps attacking when crouching     
             if self.action == "normalATK":
@@ -230,37 +245,42 @@ class Player(Entity):
                         self.action = "still"
                     else:
                         self.action = "jump"
-            #player unblocks after block (animation)                                
+                        
+            #UPDATE PLAYER ACTION            
+            self.lastAction = self.action
+            
+            #player unblocks after block (animation) - dependent on lastAction                               
             if self.lastAction == "block":
                 if self.action == "block":
                     self.status = "defending"
                     self.f = 0
                 elif self.action != "block":
                     self.action = "block"
-                    self.lastAction = "still"                    
-                                
-            #update directional movement
-            if self.direction["left"]:
-                self.dir = -1
-                if self.status == "passive":
-                    self.vx = -5
-                    if self.y + self.h == g.g:
-                        self.action = "walk"
-            elif self.direction["right"] == True:  #right
-                self.dir = 1
-                if self.status == "passive":
-                    self.vx = 5
-                    if self.y + self.h == g.g:
-                        self.action = "walk"
-            if self.direction["up"] == True and self.y + self.h == g.g and self.status != "defending":
-                self.vy = -13
-                self.action = "jump"
-                
-            #move back to "still" if no keys are pressed    
-            if (self.direction["up"] == False) and (self.direction["left"] == False) and (self.direction["right"] == False):
-                self.vx = 0
-                if self.lastAction == ("walk" or "jump"):
-                    self.action = "still"
+                    self.lastAction = "still"   
+                                     
+            if self.status != "attacking":                    
+                #update directional movement
+                if self.direction["left"]:
+                    self.dir = -1
+                    if self.status == "passive":
+                        self.vx = -8
+                        if self.y + self.h == g.g:
+                            self.action = "walk"
+                elif self.direction["right"] == True:  #right
+                    self.dir = 1
+                    if self.status == "passive":
+                        self.vx = 8
+                        if self.y + self.h == g.g:
+                            self.action = "walk"
+                if self.direction["up"] == True and self.y + self.h == g.g and self.status != "defending":
+                    self.vy = -13
+                    self.action = "jump"
+                    
+                #move back to "still" if no keys are pressed    
+                if (self.direction["up"] == False) and (self.direction["left"] == False) and (self.direction["right"] == False):
+                    self.vx = 0
+                    if self.lastAction == ("walk" or "jump"):
+                        self.action = "still"
             #velocity is 0 when object ducks
             if self.direction["down"]:
                 self.vx = 0
@@ -278,25 +298,34 @@ class Player(Entity):
         self.x += self.vx
         self.y += self.vy
         
-        #moves game screen along
-        if (self.x + self.w/2) > g.w//2:
-            g.middlex += self.vx
-        elif (self.x + self.w/2) <= g.w//2:
-            g.middlex = 0
+        if g.type == "boss":
+            pass
+        else:
+            #moves game screen along
+            if (self.x + self.w/2) > g.w/2:
+                g.middlex += self.vx
+            elif (self.x + self.w/2) <= g.w/2:
+                g.middlex = 0
         
-
+        #hitbox update
+        y1 = (self.y + self.h/2) - ((self.h/2)*0.3125)
+        y2 = (self.y + self.h/2) + ((self.h/2)*0.8125)
         if self.x < 0:
             self.x1 = (self.x + self.w) - self.w/2 - self.w/8
             self.x2 = (self.x + self.w) - self.w/2 + self.w/8
         elif self.x >= 0 and (self.x + self.w/2) <= g.w/2:   #if between starting point and middle
             self.x1 = (self.x + self.w/2) - (self.w/8)
-            self.x2 = (self.x%g.w + self.w/2) + (self.w/8)
-        elif (self.x + self.w/2) > g.w/2:     #if self.x + self.w/2 goes beyond midpoint
-            self.x1 = (g.w/2) - (self.w/8)
-            self.x2 = (g.w/2) + (self.w/8)
+            self.x2 = (self.x + self.w/2) + (self.w/8)
+        elif (self.x + self.w/2) > g.w/2:   #if self.x + self.w/2 goes beyond midpoint
+            if g.type == "boss":
+                self.x1 = (self.x + self.w/2) - self.w/8
+                self.x2 = (self.x + self.w/2) + self.w/8
+            else:
+                self.x1 = (g.w/2) - (self.w/8)
+                self.x2 = (g.w/2) + (self.w/8)
         if self.direction["down"]:
-            self.y1 = self.y + (self.h/2*1.125)
-            self.y2 = (self.y + self.h/2) + ((self.h/2)*0.8125)   
+            y1 = self.y + (self.h/2*1.125)
+            y2 = (self.y + self.h/2) + ((self.h/2)*0.8125)   
         #reach extends when attacking (all g.enemies in range will be hit)
         if self.status == "attacking":
             if self.dir > 0:
@@ -305,9 +334,14 @@ class Player(Entity):
                 self.x1 -= self.w/4
         #create hitbox        
         self.hitRangex = range(int(self.x1),int(self.x2))
-        self.hitRangey = range(int(self.y1),int(self.y2))
+        self.hitRangey = range(int(y1),int(y2))
+        
+        
         #choosing the speeds of the animations for each action
-        self.f += 0.035*self.moveFrames[self.action]
+        if self.status == "attacking":
+            self.f += 0.05*self.moveFrames[self.action]
+        else:
+            self.f += 0.035*self.moveFrames[self.action]
         
         #animating player before hitting the ground  
         if self.action != ("walk" and "still" and "hit"):
@@ -331,45 +365,58 @@ class Player(Entity):
         else:
             self.buffer = "_0"
         
-
+        #SELECTS IMAGE TO DISPLAY
         self.img = self.kiritoImages["Krt" + self.movePath[self.action] + self.buffer + str(self.framePoint) + ".png"]
-        #final tweaks
-        self.lastAction = self.action
+        
+        #UPDATES LAST STATUS
+        self.lastStatus = self.status
 
         
         #update stats
         self.maxHealth = 100 + 10*(self.level-1)
         self.maxMP = 20 + 10*(self.level-1)
         self.maxXP = 100*1.3**(self.level-1)
-        
-        #print(self.f)
-        #print(self.framePoint)
-        #print(self.moveFrames)
-        #print(self.status)
-        print(self.action)
-        #print(self.lastAction)
-        #print(self.vy)
-        #print(self.gravity())
-        #print(self.dir)
-        #for i in range(2):
-            #print(self.hitRangex[i])
-            #print(self.hitRangey[i])
     
     #throwing knife        
     def throwObject(self):
-        if self.action == "throw":
+        if self.action == "throw" and self.status == "attacking":
             if self.lastAction != "throw":    #(x,y,vx,vy,w,h,f,d,type,dmg)
-                g.flyingObjects.append(Projectile((g.kirito.x + g.kirito.w/2),(g.kirito.y + g.kirito.h/2 - 10),g.kirito.dir*6,0,0,0,0,g.kirito.d,"knife",self.attack))
+                if self.x < g.w/2:
+                    g.flyingObjects.append(Projectile((self.x + self.w/2),(self.y + self.h/2),g.kirito.dir*6,0,0,0,0,g.kirito.dir,"knockBack",self.attack,"player"))
+                elif self.x >= g.w/2:
+                    if g.type == "boss":
+                        g.flyingObjects.append(Projectile((self.x + self.w/2),(self.y + self.h/2),g.kirito.dir*6,0,0,0,0,g.kirito.dir,"knockBack",self.attack,"player"))
+                    else:
+                        g.flyingObjects.append(Projectile((g.w/2),(self.y + self.h/2),g.kirito.dir*6,0,0,0,0,g.kirito.dir,"knockBack",self.attack,"player"))
+                
     #knockBack slash
     def knockBackSlash(self):
-        if self.action == "knockBack":
+        if self.action == "knockBack" and self.status == "attacking":
             print("knock")
             if self.lastAction != "knockBack":
-                g.flyingObjects.append(Projectile((g.kirito.x + g.kirito.w/2),(g.kirito.y + g.kirito.h/2 - 10),g.kirito.dir*6,0,0,0,0,g.kirito.d,"knockBack",self.attack))
+                if self.x < g.w/2:
+                    g.flyingObjects.append(Projectile((self.x + self.w/2),((self.y + self.h/2) + ((self.h/2)*0.8125) ),g.kirito.dir*6,0,0,0,0,g.kirito.dir,"knockBack",self.attack,"player"))
+                elif self.x >= g.w/2:
+                    if g.type == "boss":
+                        g.flyingObjects.append(Projectile((self.x + self.w/2),((self.y + self.h/2) + ((self.h/2)*0.8125) ),g.kirito.dir*6,0,0,0,0,g.kirito.dir,"knockBack",self.attack,"player"))
+                    else:
+                        g.flyingObjects.append(Projectile((g.w/2),((self.y + self.h/2) +(self.h/4)),g.kirito.dir*6,0,0,0,0,g.kirito.dir,"knockBack",self.attack,"player"))
                 
     def takeDamage(self,dmg):
         self.action = "hit"
         self.health -= dmg
+    
+    #display that shield is out of health. never got to implementing this part, though...        
+    def shieldBrokenNotify(self):
+        if self.shieldBrokenNotify == True:
+            self.shieldBrokenNotifyCounter += 1
+            textFont(Silom,18)
+            if self.x > g.w/2:
+                text("Shield Broken!", g.w/2, self.y + self.h/4)
+            elif self.x <= g.w/2:
+                text("Shield Broken!", self.x + self.w/2, self.y + self.h/4)
+            if self.shieldBrokenNotifyCounter//40 > 1:
+                self.shieldBrokenNotify = False
     
     def display(self):
         self.update()
@@ -379,12 +426,19 @@ class Player(Entity):
         noFill()
         strokeWeight(3)
         rect(self.hitRangex[0],self.hitRangey[0],(self.hitRangex[-1]-self.hitRangex[0]),(self.hitRangey[-1]-self.hitRangey[0]))
-        print(self.hitRangex[0])
-
-        if self.dir >= 0:
-            image(self.img,self.x-g.middlex,self.y,self.w,self.h)
-        elif self.dir < 0:
-            image(self.img,self.x-g.middlex,self.y,self.w,self.h,928,0,0,640)
+        #print(self.hitRangey[0])
+        #print(self.hitRangey[-1])
+        if g.type == "boss":
+            if self.dir >= 0:
+                image(self.img,self.x,self.y,self.w,self.h)
+            elif self.dir < 0:
+                image(self.img,self.x,self.y,self.w,self.h,928,0,0,640)
+        else:
+            if self.dir >= 0:
+                image(self.img,self.x-g.middlex,self.y,self.w,self.h)
+            elif self.dir < 0:
+                image(self.img,self.x-g.middlex,self.y,self.w,self.h,928,0,0,640)
+            
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-
 
 #class Boss, derived from class Player
@@ -396,7 +450,7 @@ class Boss(Player):
         self.level = level
         self.maxHealth = self.level*700
         self.health = self.maxHealth
-        self.attack = self.level*30
+        self.attack = self.level*20
         self.maxMP = self.level*40
         self.mp = self.maxMP
         
@@ -406,8 +460,6 @@ class Boss(Player):
         self.moveDictFramesUp = {"still":7, "walk":5, "jump":6, "block":1, "normalATK":3, "knockBack":6, "throw":5, "hit":3, "die":7, "ability":15}
         self.moveDictPathDown = {"still": "100", "walk":"100", "jump":"110", "block":"501", "normalATK":"103", "knockBack":"100", "throw":"100", "hit":"507", "die":"600", "ability":"201"}
         self.moveDictFramesDown = {"still":1, "walk":1, "jump":1, "block":2, "normalATK":6, "knockBack":1, "throw":1, "hit":3, "die":7, "ability":1}
-        
-
         
         #image attributes (dictionaries for images and frame count; made to ensure that random commands won't crash game)
         self.character = character    #this will choose between either Asuna or Tatsuya
@@ -450,18 +502,12 @@ class Boss(Player):
         self.lastStatus = "passive"
         self.status = "passive" #divided into "passive", "attacking", "defending", "retreat"
         self.hitCounter = 0   #makes it so that boss is immobilized for a short period of time
-        self.shieldCounter = 0   #displays shield health for short period of time
-        self.shieldBroken = False
         self.attackCounter = 0    #to keep track of the boss attacks (when it moves away to perform ranged attacks)
-        self.walkCounter = 0    #to keep track of walking
         self.moveCounter = 0    #to keep track of movements
-        self.retreatCounter = 0
-        self.playerMovementCounter = 0 #to keep track of player's position and move hitbox
+        self.walkCounter = 0
+        self.actionEnd = True  #keeps track of whether an action has been completed
+        self.count = 0
         self.ultraAttackCounter = 0   #each successful hit adds 1 to the counter, and the boss does an ultra attack at 15 hits
-        
-        #made to have boss back away if low health (or perform ranged attack)
-        self.savedDir = 1   #used to store direction for retreat
-        self.retreat = False
         
         #hitbox components
         #NOTICE: the y range of the hitbox is based on the location of the ground. If this changes, then CHANGE THE Y VALUES
@@ -480,6 +526,17 @@ class Boss(Player):
         self.movePath = self.moveDictPathUp
         self.moveFrames = self.moveDictFramesUp
         
+        #if boss dies, then status is updated
+        if self.action == "die":
+            if self.lastAction != "die":
+                self.f = 0
+                self.lastAction = self.action
+            elif self.action == self.lastAction:
+                if self.f <= self.moveFrames[self.action]:
+                    self.lastAction = self.action
+                else:
+                    self.status = "dead"
+            
         #if boss is hit, they can't do anything for 1 count (20 co
         if self.action == "hit":
             if self.lastAction != "hit":
@@ -492,8 +549,6 @@ class Boss(Player):
         else:
             #if attacking, then the entire animation needs to be completed before attempting a new one    
             if self.status == "attacking":
-                self.throwObject()
-                self.knockBackSlash()
                 if self.action != self.lastAction:
                     self.f = 0
                     self.lastAction = self.action
@@ -504,6 +559,7 @@ class Boss(Player):
                         self.action = "still"
                         self.status = "passive"
                         
+            #if jumping, the boss goes through the entire frame set            
             if self.action == "jump":
                 if self.action != self.lastAction:
                     self.f = 0
@@ -523,111 +579,118 @@ class Boss(Player):
                         self.action = "still"
                     else:
                         self.action = "jump"
-                        
-            if self.action != self.lastAction:
-                self.f = 0
-                
-            self.lastAction = self.action
-                        
-            #facing player, based on location (when passive and not in retreat mode)
-        if self.status != "retreat":
-            if self.x + self.w/2 < g.kirito.x + g.kirito.w/2 and self.distance > 10:
-                self.dir = 1  
-            elif self.x + self.w/2 > g.kirito.x + g.kirito.w/2 and self.distance > 10:
-                self.dir = -1       
-            if self.status != "attacking" and self.distance > 30:
-                self.action = "walk"
-        else:
-            self.retreatCounter += 1
-            self.dir = -1*self.savedDir
-            self.action = "walk"
-            if self.retreatCounter//20 > 2:
-                self.status = "passive"
-                self.action = "still"
-        
-        if self.distance < self.w/3:
-            self.moveBack()
-        elif self.distance >= self.w:
-            
-            
-            #if the boss is not attacking or defending, it chooses the action that will happen next randomly
-            if self.status != "attacking":        
-                #if the player is far away, the boss will perform ranged attacks until the player gets closer
-                if self.distance >= g.w/2:
+               
+            #the moves of the boss are decided with an action and a count
+            #the boss will perform the action until the counter reaches the designated count
+            if self.status != "attacking":
+                if self.distance < self.w/3:
+                    self.actionEnd = True
+                elif self.action != self.lastAction:
+                    self.f = 0
+                    self.lastAction = self.action
+                if self.action == self.lastAction:
                     self.moveCounter += 1
-                    if self.moveCounter//20 > 5:
-                        self.moveCounter = 0
-                        n = random.randint(0,5)
-                        if n == (1 or 4):
-                            self.status = "attacking"
-                            self.action = "throw"
-                            self.throwObject()
-                        elif n == 0:
-                            self.status = "attacking"
-                            self.action = "knockBack"
-                            self.knockBackSlash()
-                        elif n == 5:
-                            self.action = "walk"
-                    else:
+                    self.lastAction = self.action
+                    if self.moveCounter//20 > self.count:
+                        self.actionEnd = True
                         self.status = "passive"
                         self.action = "still"
-                #if the player is within range, the boss will walk towards player
-                elif self.distance > self.w/3 and self.distance < g.w/2:
-                    self.action = "walk"
-                #once in hitting range, the boss will attack player
-                elif self.distance <= self.w/3:
-                    if self.y < g.kirito.y:
-                        self.action = "jump"
-                    self.attackPlayer()
-        
-        #IF WALKING
-        if self.action == "walk":
-            if self.x + self.w/2 < g.w:
-                self.walkCounter += 1
-                self.vx = 3*self.dir
-                if self.walkCounter//20 > 3:
-                    self.vx = 0
-                    self.action = "still"
-                    self.walkCounter = 0
-                    
-        if self.status == "passive" and self.vx == 0 and self.gravity():
-            self.action = "still"
-                    
-         #fixing directions       
-        if (self.x + self.w/2 <= 0 and self.dir == -1):
-            self.dir = 1
-            self.action = "walk"
-        elif self.x + self.w/2 > g.w:
-            self.dir = -1
-            self.action = "walk"
+            if self.actionEnd:
+                self.action = "still"
                 
-        #stops moving when attacking
-        if self.status == "attacking":
-            self.vx = 0
-
-        #updates final position of object
-        self.x += self.vx
-        self.y += self.vy  
-        
-        #animating player before hitting the ground  
-        if self.action != ("walk" and "still" and "hit"):
-            if self.action == "jump":
-                if self.f > self.moveFrames[self.action]:
-                    if self.gravity():
-                        self.action = "still"
-                        self.f = 0
-                    count = 1
-                    if self.vy > 5:
-                        self.f -= 4.8*count
-                        count +=1
-                    else:
-                        self.f -= 0.4
+            #based on distances, only activated when boss completes a moveset
+            if self.action == "still" or (self.status == "passive" and self.actionEnd):
+                
+                if self.distance < self.w/3:  #if in hitting distance
+                    self.attackCounter += 1
+                    if self.attackCounter//20 > 3:
+                        n = random.randint(0,1)
+                        print(n)
+                        if n == 0:   #back away from player
+                            self.action = "walk"
+                            self.count = 1
+                            self.dir = (self.x - g.kirito.x)/abs(self.x - g.kirito.x)
+                            if self.moveCounter == 0:
+                                self.attackPlayer("melee")
+                        elif n == 1:  #attack player
+                            self.attackPlayer("melee")
                         
-        #reset frames when actions change
-        if self.action != self.lastAction:
-            self.f = 0
-            self.moveCounter = 0
+                elif self.distance < self.w/2:   #if further than hitting distance
+                    self.attackCounter += 1
+                    if self.attackCounter//20 > 3:
+                        n = random.randint(0,1)
+                        if n == 0:   #walk towards player
+                            self.action = "walk"
+                            self.dir = -(self.x - g.kirito.x)/abs(self.x - g.kirito.x)
+                            self.count = 2
+                        elif n == 1:  #attack player
+                            self.attackPlayer("mranged")
+                        
+                else:   #if beyond this distance
+                    self.attackCounter += 1
+                    if self.attackCounter//20 > 3:
+                        n = random.randint(0,1)
+                        if n == 0:   #walk towards player
+                            self.action = "walk"
+                            self.dir = -(self.x - g.kirito.x)
+                            self.count = 2
+                            if self.x + self.w/2 <= g.kirito.x:
+                                self.dir = 1
+                            else:
+                                self.dir = -1
+                        elif n == 1:  #attack player
+                            self.attackPlayer("ranged")
         
+            #IF WALKING
+            if self.action == "walk":
+                self.vx = 3*self.dir
+                if self.distance > g.w:
+                    if self.actionEnd:
+                        self.action == "still"
+                else:
+                    self.actionEnd = True
+                        
+            self.actionEnd = False
+                        
+            if self.status == "passive" and self.vx == 0 and self.gravity():
+                self.action = "still"
+                        
+            #fixing directions       
+            if (self.x + self.w/2 <= 0 and self.dir == -1):
+                self.dir = 1
+                self.action = "walk"
+                self.count = 5
+            elif self.x + self.w/2 > g.w:
+                self.dir *= -1
+                self.vx = 0
+                    
+            #stops moving when attacking
+            if self.status == ("attacking" or "defending"):
+                self.vx = 0
+    
+            #updates final position of object
+            self.x += self.vx
+            self.y += self.vy  
+            
+            #animating player before hitting the ground  
+            if self.action != ("walk" and "still" and "hit"):
+                if self.action == "jump":
+                    if self.f > self.moveFrames[self.action]:
+                        if self.gravity():
+                            self.action = "still"
+                            self.f = 0
+                        count = 1
+                        if self.vy > 5:
+                            self.f -= 4.8*count
+                            count +=1
+                        else:
+                            self.f -= 0.4
+                            
+            #reset frames when actions change
+            if self.action != self.lastAction:
+                self.f = 0
+                self.moveCounter = 0
+            
         #hitbox update
         y1 = (self.y + self.h/2) - ((self.h/2)*0.3125)
         y2 = (self.y + self.h/2) + ((self.h/2)*0.8125)
@@ -687,12 +750,12 @@ class Boss(Player):
         
         #UPDATES LAST STATUS
         self.lastStatus = self.status
-        self.lastAction = self.action
         
         #print(self.f)
         #print(self.framePoint)
         #print(self.moveFrames)
-        print(self.status)
+        #print(self.status)
+        #print(self.health)
         #print(self.lastStatus)
         #print(self.action)
         #print(self.distance)
@@ -700,56 +763,74 @@ class Boss(Player):
         #print(self.vy)
         #print(self.gravity())
         #print(self.dir)
-        for i in range(2):
-            print(self.hitRangex[i])
-            print(self.hitRangey[i])
-    def moveBack(self,count):
-        n = count
-        if self.
-        self.dir = 
-        self.walkCounter += 1
-        if self.walkCounter//20 = n:
-            self.action = "still"
-                    
-    #attackPlayer is divided into different attacks
-    def attackPlayer(self):
-        self.attackCounter += 1
-        if self.attackCounter//20 > 4:
-            print("constantly checkung")
-            if self.ultraAttackCounter == 10:
+        #for i in range(2):
+         #   print(self.hitRangex[i])
+         #   print(self.hitRangey[i])
+
+    def attackPlayer(self,type):
+        self.dir = -(self.x - g.kirito.x)/abs(self.x - g.kirito.x)
+        if type == "melee":
+            if self.ultraAttackCounter > 15:
                 self.status = "attacking"
                 self.action = "ability"
-                self.ultraAttackCounter = 0
-        else:
-            n = random.randint(0,3)
-            if n == (0 or 3):
+            else:
+                n = random.randint(0,4)
+                print(n)
+                if n == (0 or 1):
+                    self.status = "attacking"
+                    self.action = "normalATK"
+                    print(self.action)
+                elif n == (4):
+                    self.status = "defending"
+                    self.action = "block"
+                    self.count = 1
+        elif type == "mranged":
+            n = random.randint(0,4)
+            if n == (0 or 2):
                 self.status = "attacking"
-                self.action = "normalATK"
-            elif n == 1:
-                self.moveBack(2)
-                self.status = "attacking" 
                 self.action = "throw"
-            elif n == 2:
-                self.moveBack(2)
+                self.throwObject()
+            elif n == 4:
                 self.status = "attacking"
                 self.action = "knockBack"
-    #throwing knife        
+                self.knockBackSlash()
+            elif n == (1 or 3):
+                self.status = "defending"
+                self.action = "block"
+                self.count = 1
+                    
+        elif type == "ranged":
+            n = random.randint(0,4)
+            if n == (0 or 2):
+                self.status = "attacking"
+                self.action = "throw"
+                self.throwObject()
+            elif n == (3 or 4):
+                self.status = "attacking"
+                self.action = "knockBack"
+                self.knockBackSlash()
+            elif n == (1):
+                self.status = "defending"
+                self.action = "block"
+                self.count = 1
+                        
+    #throwing weapon        
     def throwObject(self):
         if self.action == "throw" and self.status == "attacking":
             if self.lastAction != "throw":    #(x,y,vx,vy,w,h,f,d,type,dmg)
-                g.flyingObjects.append(Projectile((self.x + self.w/2),(self.y + self.h/2),self.dir*6,0,0,0,0,self.dir,"knockBack",self.attack))
+                g.flyingObjects.append(Projectile((self.x + self.w/2),(self.y + self.h/2),self.dir*6,0,0,0,0,self.dir,"knockBack",self.attack, "enemy"))
                     
     #knockBack slash
     def knockBackSlash(self):
         if self.action == "knockBack" and self.status == "attacking":
             if self.lastAction != "knockBack":
-                g.flyingObjects.append(Projectile((self.x + self.w/2),((self.y + self.h/2) + ((self.h/2)*0.8125) ),self.dir*2,0,0,0,0,self.dir,"knockBack",self.attack))
+                g.flyingObjects.append(Projectile((self.x + self.w/2),(self.y + self.h/2 + self.h/4),self.dir,0,0,0,0,self.dir,"knockBack",self.attack, "enemy"))
 
                 
     def takeDamage(self,dmg):
         self.action = "hit"
         self.health -= dmg
-       
+        
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-
 
@@ -763,7 +844,7 @@ class Enemy(Entity):
         #movement dictionaries for enemies
         
         self.moveDictPathMelee = {"still": "000", "walk":"400", "jump":"200", "block":"500", "normalATK":"001", "knockBack":"003", "throw":"990", "hit":"508"}
-        self.moveDictFramesMelee = {"still":7, "walk":5, "jump":6, "block":2, "normalATK":3, "knockBack":6, "throw":5, "hit":3}
+        self.moveDictFramesMelee = {"still":7, "walk":5, "normalATK":3, "hit":3}
         #uses Quen images
         self.moveDictPathRanged = {"still": "000", "attack":"301", "hit":"508"}
         self.moveDictFramesRanged = {"still":1, "attack":3, "hit":3}
@@ -798,18 +879,15 @@ class Enemy(Entity):
         stroke(192)
         noFill()
         rect(self.x - g.middlex, self.y - 10, self.w, 5) #x,y,w,h, subtract middle x to keep above when Kirito in middle!
-        
-        self.x += self.vx
-        self.y += self.vy
-            
-        
+
     def attackPlayer(self):
         if self.type == "melee":
             print(self.x, g.kirito.x, self.x - g.kirito.x, self.w//3)
             if (self.x > g.kirito.x) and (self.x - (g.kirito.x + 200) < self.w//3):
                 print("TRUE")
                 self.action = "attack"
-                g.kirito.health -= self.attack
+                if self.lastAction != "attack":
+                    g.kirito.takeDamage(self.attack)
             
     def update(self):
         self.gravity()
@@ -826,22 +904,35 @@ class Enemy(Entity):
         elif self.dir == 1:
             self.vx = 2
             
+        if g.kirito.x > g.middlex:
+            self.x1 -= g.kirito.vx
+            self.x2 -= g.kirito.vx
+        
+        #update position                
+        self.x += self.vx
+        self.y += self.vy
+            
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-        
 
 #class Projectile, derived from class Entity; this is the projectile throw by player
 #2 types: "knife", "knockBack", and "bullet", which are used to differentiate images and projectile speeds
 #format: Projectile((g.kirito.x + g.kirito.w/2),(g.kirito.y + g.kirito.h//2),g.kirito.dir*8,0,0,g.kirito.d,"knife",g.kirito.attack)
 class Projectile(Entity):
-    def __init__(self,x,y,vx,vy,w,h,f,d,type,dmg):
+    def __init__(self,x,y,vx,vy,w,h,f,d,type,dmg,character):
         Entity.__init__(self,x,y,vx,vy,w,h,f,d)
+        self.dir = d
         self.type = type
         self.count = 1
         self.damage = dmg
+        self.origin = character
         
     def update(self):
         #accelerates with time
         self.count +=1
-        self.x += self.vx + 1.5*self.count
+        self.x += (self.vx + 1.5*self.count)*self.dir
+        
+        if g.kirito.x > g.middlex:
+            self.x -= g.kirito.vx
         
     def display(self):
         self.update()
@@ -857,7 +948,7 @@ class Projectile(Entity):
 ###################################################################################################################################################################################################
 ###################################################################################################################################################################################################
 #STAGES
-
+'''
 #create class Stage; all stages will stem from this (uses player (will need to be constant throughout game; g.kirito),enemies,etc)
 class Stage:
     def __init__(self,w,h,g,level,middlex):
@@ -898,21 +989,24 @@ class BossRoom(Stage):
         for i in self.enemies:
             for num in i.hitRangex:
                 if num in self.kirito.hitRangex:
-                    for i in i.hitRangey:
-                        if num in self.kirito.hitRangex:
-                            if i.lastAction != "attack":
-                                g.kirito.takeDamage(i.attack)
+                    if self.kirito.y - i.y <= 0:
+                        if i.status == "attacking" and i.lastStatus != "attacking":
+                            self.kirito.takeDamage(i.attack)
+                        elif self.kirito.status == "attacking" and self.kirito.lastStatus != "attacking":
+                            i.takeDamage(self.kirito.attack)
         
         #a flying object is removed and deals damage if it hits a moving object (player or enemy)
         for fly in self.flyingObjects:
             for i in self.enemies:
-                if fly.x in i.hitRangex:
-                    if self.y in i.hitRangey:
-                        i.takeDamage(fly.damage)
-            if fly.x in g.kirito.hitRangex:
-                if fly in g.kirito.hitRangey:
-                    g.kirito.takeDamage(fly.damage)
-                                                        
+                if fly.origin != "enemy":
+                    if fly.x in i.hitRangex:
+                        if fly.y in i.hitRangey:
+                            i.takeDamage(fly.damage)
+            if fly.origin != "player":                
+                if fly.x in self.kirito.hitRangex:
+                    if fly.y in self.kirito.hitRangey:
+                        self.kirito.takeDamage(fly.damage)
+                    
         #every 3 counts, a flyingObject is removed from the map
         if len(self.flyingObjects) > 0:
             self.projectileTimer += 1
@@ -920,6 +1014,8 @@ class BossRoom(Stage):
             if self.projectileTimer//20 >= 3:
                 del self.flyingObjects[0]
                 self.projectileTimer = 0
+    
+'''
     
 
 #create class StageTwo(Stage)
@@ -933,188 +1029,72 @@ class BossRoom(Stage):
 
 #create class Game (self,g,h,w,kirito = Player(arg))
 class Game:
-    def __init__(self,w,h,g):
+    def __init__(self,w,h,g,type):
         self.w = w
         self.h = h
         self.g = g
         self.middlex = 0
         self.frames = 0
-        self.backgr = ["","",""]
-        self.projectileTimer = 0
-        self.kirito = Player(0,0,0,0,500,345,0,1) #x,y,vx,vy,w,h,f,d
-        self.kirito.y = self.g - (self.kirito.h)
-        self.enemies = []    #keep track of enemies
-        self.flyingObjects = []      #keep track of airborne objects
-        self.state = "game"
-        
-        #Loading Background Images from /images/background
-        for i in (range(3)): #[0, 1, 2]
-            self.backgr[i] = loadImage(path + "/images/Background/0" + str(i) + ".png")
-            
-            
-    def update(self):
-        #if kirito attacks, if his last action is different, then he deals damage (prevents him from putting out 4k+ damage with one swing)
-        #this also applies to the enemies vs Kirito
-        for i in self.enemies:
-            for num in i.hitRangex:
-                if num in self.kirito.hitRangex:
-                    for i in i.hitRangey:
-                        if num in self.kirito.hitRangex:
-                            if i.lastAction != "attack":
-                                g.kirito.takeDamage(i.attack)
-        
-        #a flying object is removed and deals damage if it hits a moving object (player or enemy)
-        for fly in self.flyingObjects:
-            for i in self.enemies:
-                if fly.x in i.hitRangex:
-                    if self.y in i.hitRangey:
-                        i.takeDamage(fly.damage)
-            if fly.x in g.kirito.hitRangex:
-                if fly in g.kirito.hitRangey:
-                    g.kirito.takeDamage(fly.damage)
-                                                        
-        #every 5-10 counts, a flyingObject is removed from the map
-        if len(self.flyingObjects) > 0:
-            self.projectileTimer += 1
-            if self.projectileTimer//20 >= 5:
-                del self.flyingObjects[0]
-                self.projectileTimer = 0
-        
-    
-    def display(self):
-        self.update()
-        
-        for img in self.backgr:
-            image(img, 0, 0, self.w, self.h)
-        self.frames +=1
-        cnt = 3
-        
-        #display background
-        for img in self.backgr:
-            #print(self.middlex, cnt, self.w)
-            x = (self.middlex//cnt) % self.w #always 0, self.x is 0 until mario reaches the middle of screen
-            #Remainder always resets x after it passes the 'width' --> 1280%1280 = 0, 1281%1280 = 1 ...
-            #img5 has the highest x! -> 
-            
-            #print(self.middlex, x, self.w-x+1, self.w-x)
-            #image(img, x, y, width, height, x1, y1, x2, y2) //// (x1, y1) -> upper left, (x2, y2) -> lower right
-            image (img,0,0,self.w-x+1,self.h,x-1,0,self.w,self.h)
-            image (img,self.w-x,0,x,self.h,0,0,x,self.h)
-            cnt -= 1
-           
-        #display flyingObjects     
-        for fly in self.flyingObjects:
-            fly.display()  
-        
-        #display player    
-        self.kirito.display()
-        
-        #Displaying Player Stats
-        #Health bar
-        noStroke()
-        if self.kirito.health > 50:
-            fill(0, 255, 0)
-        elif self.kirito.health < 25:
-            fill(255, 0, 0)
-        else:
-            fill(255, 200, 0)
-        self.newHealth = (float(self.kirito.health) / self.kirito.maxHealth) * 200 #Percentage of max health
-        #Health Bar Outline
-        rect(50, 50, self.newHealth, 15)
-        stroke(192)
-        noFill()
-        rect(50, 50, 200, 15) #x,y,w,h
-        
-        noStroke()
-        fill(0,0,255)
-        self.newMP = (float(self.kirito.mp) / self.kirito.maxMP) * 200 #Percentage of max health
-        #MP Bar Outline
-        rect(50, 75, self.newMP, 15)
-        stroke(192)
-        noFill()
-        rect(50, 75, 200, 15) #x,y,w,h
-        
-        noStroke()
-        fill(173,216,255)
-        self.newXP = (float(self.kirito.experience)%self.kirito.maxXP / self.kirito.maxXP) * 300 #Percentage of max health
-        #MP Bar Outline
-        rect(50, 30, self.newXP, 10, 3)
-        stroke(192)
-        noFill()
-        rect(50, 30, 300, 10, 3) #x,y,w,h
-        
-        
-        #Game over
-        self.gameOverCheck()
-
-    def gameOverCheck(self):
-        if self.kirito.health == 0:
-            self.state = "gameover"
-            
-    def reset(self):
-        self.kirito.health = 100
-
-
-
-#def update(self):
-    #this whole area will take care of all stages and levels in them. self.stageCount will determine the stage (background and enemies)
-    #and self.levelCount will determine the level (level 3, enter boss room)
-    
-    #if player's health reaches 0, self.playerDeath == True
-    
-#def gameOver(self):
-    #display "You Died" in red. display restart menu
-    #if restart is clicked:
-        #g.gameReset == True
-
-#def gameComplete(self):
-    #
-
-###################################################################################################################################################################################################
-###################################################################################################################################################################################################
-
-#GAME
-
-#create class Game (self,g,h,w,kirito = Player(arg))
-class Game:
-    def __init__(self,w,h,g):
-        self.w = w
-        self.h = h
-        self.g = g
-        self.middlex = 0
-        self.frames = 0
-        self.backgr = backgrounds[0]
+        self.backgr = backgrounds[1]
         self.projectileTimer = 0
         self.kirito = Player(0,0,0,0,500,345,0,1) #x,y,vx,vy,w,h,f,d
         self.kirito.y = self.g - (self.kirito.h)
         self.flyingObjects = []      #keep track of airborne objects (knives, bullets, knockBack, etc.)
         self.state = "game"
         self.level = 1
+        self.type = "boss"
         
         self.enemies = [Boss(500,0,0,0,432,345,0,-1,"asuna","Asu",2)]   #x,y,vx,vy,w,h,f,d,character,fileName,level
         self.enemies[0].y = self.g - (self.enemies[0].h)
             
             
     def update(self):
+        self.gameOverCheck()
+        print(self.state)
+            
+        if self.kirito.x + self.kirito.w/2 > self.w:
+            self.kirito.vx = 0
+            self.action = "still"
+            
+        if self.enemies[0].x + self.enemies[0].w/2 > self.w:
+            self.enemies[0].vx = 0
+            self.action = "still"
+            
+        
         #if kirito attacks, if his last action is different, then he deals damage (prevents him from putting out 4k+ damage with one swing)
         #this also applies to the enemies vs Kirito
         for i in self.enemies:
-            for num in i.hitRangex:
-                if num in g.kirito.hitRangex:
-                    for y in i.hitRangey:
-                        if y in g.kirito.hitRangey:
-                            if i.lastAction != "attack":
-                                g.kirito.takeDamage(i.attack)
+            if abs(i.x-self.kirito.x) < i.w/2:
+                if i.action == "normalATK" and i.lastAction != "normalATK":
+                    print("worked but nothing else")
+                    if (i.x < self.kirito.x and i.dir > 0) or (i.x > self.kirito.x and i.dir < 0):
+                        self.kirito.takeDamage(i.attack/10)
+                elif self.kirito.action == "normalATK" and self.kirito.lastAction != "normalATK":
+                    if (self.kirito.x < i.x and self.kirito.dir > 0) or (self.kirito.x > i.x and self.kirito.dir < 0):
+                        i.takeDamage(self.kirito.attack*10)
         
-        #a flying object is removed and deals damage if it hits a moving object (player or enemy)
+        
+#a flying object is removed and deals damage if it hits a moving object (player or enemy)
         for fly in self.flyingObjects:
             for i in self.enemies:
-                if fly.x in i.hitRangex:
-                    if self.y in i.hitRangey:
-                        i.takeDamage(fly.damage)
-            if fly.x in g.kirito.hitRangex:
-                if fly in g.kirito.hitRangey:
-                    g.kirito.takeDamage(fly.damage)
+                if fly.origin != "enemy":
+                    if fly.x in i.hitRangex:
+                        if fly.y in i.hitRangey:
+                            i.takeDamage(fly.damage/20)
+            if fly.origin != "player":                
+                if fly.x in self.kirito.hitRangex:
+                    if fly.y in self.kirito.hitRangey:
+                        self.kirito.takeDamage(fly.damage/20)
+                        
+        for i in self.enemies:
+            if i.health <= 0:
+                i.action = "die"
+                if i.status == "dead":
+                    self.enemies.remove(i)
+                    
+        if len(self.enemies) == 0:
+            self.state = "complete"
+            
                                                         
         #every 3 counts, a flyingObject is removed from the map
         if len(self.flyingObjects) > 0:
@@ -1127,12 +1107,13 @@ class Game:
     
     def display(self):
         self.update()
-        
-        for img in self.backgr:
+        count = 0
+        for i in range(4):
+            img = self.backgr[i]
             image(img, 0, 0, self.w, self.h)
         self.frames +=1
         cnt = 4
-        print(self.backgr)
+        
         for img in self.backgr:
             #print(self.middlex, cnt, self.w)
             x = (self.middlex//cnt) % self.w #always 0, self.x is 0 until mario reaches the middle of screen
@@ -1148,9 +1129,10 @@ class Game:
         #display flyingObjects     
         for fly in self.flyingObjects:
             fly.display()  
-            
-        #display boss
-        self.enemies[0].display()
+        
+        #display enemies
+        for i in self.enemies:
+            i.display()
         
         #display player    
         self.kirito.display()
@@ -1191,11 +1173,14 @@ class Game:
         
         
         #Game over
-        self.gameOverCheck()
+        
 
     def gameOverCheck(self):
-        if self.kirito.health == 0:
+        if self.kirito.health <= 0:
             self.state = "gameover"
+        elif len(self.enemies) == 0:
+            self.state = "complete"
+        
             
     def reset(self):
         self.kirito.health = 100
@@ -1213,14 +1198,11 @@ class Game:
     #if restart is clicked:
         #g.gameReset == True
 
-#def gameComplete(self):
-    #
-
 ###################################################################################################################################################################################################
 ###################################################################################################################################################################################################
 
 #SETUP AND DRAW
-g = Game(1080,720,640)
+g = Game(1080,720,640,"boss")
 
 
 def setup():
@@ -1249,15 +1231,28 @@ def draw():
     elif g.state == "gameover":
         fill(255, 0, 0)
         textSize(60)
-        textAlign(CENTER, BOTTOM)
-        text("YOU DIED", 350, 350)
+        textAlign(CENTER, TOP)
+        text("YOU DIED", g.w/2, 350)
         textSize(30)
         
         if 460 < mouseX < 610 and 420 < mouseY < 460:
             fill(255,0,0)
         else:
             fill(255, 255, 255)
-        text("Continue?", 460, 450)
+        text("Continue?", g.w/2, 450)
+    elif g.state == "complete":
+        fill(255, 0, 0)
+        textSize(60)
+        textAlign(CENTER, TOP)
+        text("You Win!", g.w/2, 350)
+        textSize(30)
+        
+        if 460 < mouseX < 610 and 420 < mouseY < 460:
+            fill(255,0,0)
+        else:
+            fill(255, 255, 255)
+        text("Restart?", g.w/2, 450)
+        
         
 ###################################################################################################################################################################################################
 ###################################################################################################################################################################################################
@@ -1270,9 +1265,37 @@ def keyPressed():
             g.kirito.direction["down"] = True
             
     elif keyCode == 32:
-        g.kirito.vx = 0
-        g.kirito.status = "defending"
-        g.kirito.action = "block"
+        if g.kirito.shieldBroken == False:
+            g.kirito.vx = 0
+            g.kirito.status = "defending"
+            g.kirito.action = "block"
+        else:
+            g.kirito.shieldBrokenNotify = True
+                        
+    elif keyCode == 76:    # (L)
+        if g.kirito.status != "defending":
+            g.kirito.status = "attacking"
+            g.kirito.action = "normalATK"
+            
+    elif keyCode == 74:    # (J)
+        #this skill takes 10 mp. If the player doesn't have enough, the game notifies the player saying that there's "No MP!"
+        if g.kirito.status != "defending" and g.kirito.direction["down"] == False:
+            if g.kirito.mp - 10 > 0:
+                g.kirito.status = "attacking"
+                g.kirito.action = "knockBack"
+                g.kirito.mp -= 10
+            else:
+                g.kirito.mpLackingNotify = True
+                        
+    elif keyCode == 75:    #(K)
+        #this skill takes 5 mp. If the player doesn't have enough, the game notifies the player saying that there's "No MP!"
+        if g.kirito.status != "defending" and g.kirito.direction["down"] == False:
+            if g.kirito.mp - 5 > 0:
+                g.kirito.status = "attacking"
+                g.kirito.action = "throw"
+                g.kirito.mp -=5
+            else:
+                g.kirito.mpLackingNotify = True
         
     elif keyCode == 87:    #up(W)
         if (not g.kirito.direction["down"]) and g.kirito.status != "defending":
@@ -1285,21 +1308,7 @@ def keyPressed():
     elif keyCode == 68:     #right(D)
         if g.kirito.status != "defending":
             g.kirito.direction["right"] = True
-    
-    elif keyCode == 76:    # (L)
-        if g.kirito.status != "defending":
-            g.kirito.status = "attacking"
-            g.kirito.action = "normalATK"
-            
-    elif keyCode == 74:    # (J)
-        if g.kirito.status != "defending" and g.kirito.direction["down"] == False:
-            g.kirito.status = "attacking"
-            g.kirito.action = "knockBack"
-        
-    elif keyCode == 75:    #(K)
-        if g.kirito.status != "defending" and g.kirito.direction["down"] == False:
-            g.kirito.status = "attacking"
-            g.kirito.action = "throw"
+
         
 def keyReleased():
     if keyCode == 83:     #down(s)
@@ -1315,11 +1324,10 @@ def keyReleased():
         g.kirito.direction["right"] = False
     
     elif keyCode == 32:
-        g.kirito.action = "still"
-        g.kirito.status = "passive"
+        if g.kirito.shieldBroken == False:
+            g.kirito.action = "still"
+            g.kirito.status = "passive"
 
 def mouseClicked():
     g.kirito.takeDamage(10)
-
-#if g.gameReset == True:
-    #g = Game()
+    g.enemies[0].takeDamage(10)
